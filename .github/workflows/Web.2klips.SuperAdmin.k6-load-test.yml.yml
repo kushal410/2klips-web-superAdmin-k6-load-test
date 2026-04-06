@@ -13,18 +13,29 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Run k6 Load Test
+      # ✅ Run k6 test and generate HTML report
+      - name: Run k6 Load Test with HTML Report
         uses: grafana/k6-action@v0.3.1
         with:
           filename: tests/main.js
+          flags: --summary-export=results/summary.json --out html=results/report.html
         env:
           BASE_URL: https://super.2klips.com
           FEED_API: /api/posts
-
-          # 🔐 Secure token from GitHub Secrets
           TOKEN: ${{ secrets.K6_TOKEN }}
-
-          # ⚙️ Load config
           MAX_VUS: 1000
           STEP_VUS: 100
           STEP_DURATION: 10s
+
+      # ✅ Upload results
+      - name: Upload HTML Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: k6-html-report
+          path: results/report.html
+
+      - name: Upload JSON Summary
+        uses: actions/upload-artifact@v4
+        with:
+          name: k6-summary-json
+          path: results/summary.json
