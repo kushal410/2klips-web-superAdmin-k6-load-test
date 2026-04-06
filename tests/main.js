@@ -1,32 +1,42 @@
-
 import http from 'k6/http';
 import { sleep, check } from 'k6';
 
-// 🔹 CONFIG
-const BASE_URL = 'https://super.2klips.com';
+/*
+  🔹 ENV VARIABLES (with defaults)
+  You can override via CLI or GitHub Actions
+*/
 
-// ✅ IMPORTANT: Replace with real token (login once, copy from browser)
-const TOKEN = 'PASTE_YOUR_BEARER_TOKEN_HERE';
+const BASE_URL = __ENV.BASE_URL || 'https://super.2klips.com';
+const TOKEN = __ENV.TOKEN || 'PASTE_YOUR_TOKEN_HERE';
+const FEED_API = __ENV.FEED_API || '/api/posts';
 
-// 🔹 LOAD OPTIONS
+// Optional tuning
+const MAX_VUS = Number(__ENV.MAX_VUS) || 1000;
+const STEP_VUS = Number(__ENV.STEP_VUS) || 100;
+const STEP_DURATION = __ENV.STEP_DURATION || '10s';
+const HOLD_DURATION = __ENV.HOLD_DURATION || '1m';
+
+/*
+  🔹 Dynamic stages generator
+  (increments users by STEP_VUS every STEP_DURATION)
+*/
+function generateStages(maxVus, stepVus, stepDuration) {
+  let stages = [];
+  for (let vus = stepVus; vus <= maxVus; vus += stepVus) {
+    stages.push({ duration: stepDuration, target: vus });
+  }
+  return stages;
+}
+
 export let options = {
   scenarios: {
     ramping_test: {
       executor: 'ramping-vus',
       startVUs: 0,
       stages: [
-        { duration: '10s', target: 100 },
-        { duration: '10s', target: 200 },
-        { duration: '10s', target: 300 },
-        { duration: '10s', target: 400 },
-        { duration: '10s', target: 500 },
-        { duration: '10s', target: 1000 },
-        { duration: '10s', target: 2000 },
-        { duration: '10s', target: 3000 },
-        { duration: '10s', target: 4000 },
-        { duration: '10s', target: 5000 },
-        { duration: '2m', target: 5000 }, // hold load
-        { duration: '1m', target: 0 },    // ramp down
+        ...generateStages(MAX_VUS, STEP_VUS, STEP_DURATION),
+        { duration: HOLD_DURATION, target: MAX_VUS },
+        { duration: '30s', target: 0 },
       ],
     },
   },
@@ -37,36 +47,36 @@ export let options = {
   },
 };
 
-// 🔹 MAIN TEST FLOW
+/*
+  🔹 MAIN TEST FLOW
+*/
 export default function () {
 
-  // 1️⃣ Load homepage
-  let homeRes = http.get(BASE_URL);
+  // 1️⃣ Homepage
+  let home = http.get(BASE_URL);
 
-  check(homeRes, {
-    'homepage status 200': (r) => r.status === 200,
+  check(home, {
+    'homepage OK': (r) => r.status === 200,
   });
 
   sleep(1);
 
-  // 2️⃣ Simulate scrolling feed (API calls)
-  for (let page = 1; page <= 5; page++) {
-
-    let feedRes = http.get(`${BASE_URL}/api/posts?page=${page}`, {
+  // 2️⃣ Simulate scroll (feed API)
+  for (let i = 1; i <= 5; i++) {
+    let feed = http.get(`${BASE_URL}${FEED_API}?page=${i}`, {
       headers: {
-        'Authorization': `Bearer ${TOKEN}`,
-        'Content-Type': 'application/json',
+        Authorization: `Bearer ${TOKEN}`,
       },
     });
 
-    check(feedRes, {
-      'feed status 200': (r) => r.status === 200,
-      'feed response < 1.5s': (r) => r.timings.duration < 1500,
+    check(feed, {
+      'feed OK': (r) => r.status === 200,
+      'fast response': (r) => r.timings.duration < 1500,
     });
 
-    sleep(1); // user scroll delay
+    sleep(1);
   }
 
-  // 3️⃣ Think time (real user pause)
+  // 3️⃣ Think time
   sleep(2);
 }
