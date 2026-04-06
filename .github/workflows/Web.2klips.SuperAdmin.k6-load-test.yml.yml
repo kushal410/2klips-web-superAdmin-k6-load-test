@@ -18,7 +18,7 @@ jobs:
         uses: grafana/k6-action@v0.3.1
         with:
           filename: tests/main.js
-          flags: --summary-export=results/summary.json --out html=results/report.html
+          flags: --summary-export=results/summary.json
         env:
           BASE_URL: https://super.2klips.com
           FEED_API: /api/posts
